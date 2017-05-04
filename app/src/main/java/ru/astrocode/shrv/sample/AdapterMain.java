@@ -31,8 +31,6 @@ public class AdapterMain extends RecyclerView.Adapter<AdapterMain.ViewHolderMain
 
         if (viewType == TYPE_HEADER) {
             view.setBackgroundColor(Color.parseColor("#808080"));
-        } else if (viewType == TYPE_ITEM) {
-            view.setBackgroundColor(Color.parseColor("#80ff0000"));
         }
 
         return new ViewHolderMain(view);

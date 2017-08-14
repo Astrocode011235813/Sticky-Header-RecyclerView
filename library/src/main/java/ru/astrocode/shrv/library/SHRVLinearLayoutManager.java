@@ -55,6 +55,12 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager {
 
     @Override
     public void onLayoutChildren(RecyclerView.Recycler recycler, RecyclerView.State state) {
+
+        if (state.getItemCount() == 0) {
+            removeAndRecycleAllViews(recycler);
+            return;
+        }
+
         detachAndScrapAttachedViews(recycler);
 
         if (mStartPointOfFirstItem == -1) {

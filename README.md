@@ -1,5 +1,5 @@
 # Sticky-Header-RecyclerView
----
+
 This library allows you to create lists with sticky headers in a vertical or horizontal orientation.Supports **API 10** and above.
 
 ![Example vertical](img_example_vertical.gif)

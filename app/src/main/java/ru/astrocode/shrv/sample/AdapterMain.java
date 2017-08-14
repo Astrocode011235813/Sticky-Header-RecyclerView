@@ -8,6 +8,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+
 import ru.astrocode.shrv.library.SHRVItemType;
 
 /**
@@ -18,11 +21,11 @@ public class AdapterMain extends RecyclerView.Adapter<AdapterMain.ViewHolderMain
     private final static int TYPE_ITEM = 1;
 
     private final Context mContext;
-    private String[] mData;
+    private ArrayList<String> mData;
 
     public AdapterMain(Context context) {
         mContext = context;
-        mData = context.getResources().getStringArray(R.array.Countries);
+        mData = new ArrayList<String>(Arrays.asList(context.getResources().getStringArray(R.array.Countries)));
     }
 
     @Override
@@ -38,12 +41,12 @@ public class AdapterMain extends RecyclerView.Adapter<AdapterMain.ViewHolderMain
 
     @Override
     public void onBindViewHolder(AdapterMain.ViewHolderMain holder, int position) {
-        holder.mTextView.setText(mData[position]);
+        holder.mTextView.setText(mData.get(position));
     }
 
     @Override
     public int getItemViewType(int position) {
-        if (mData[position].length() == 1) {
+        if (mData.get(position).length() == 1) {
             return TYPE_HEADER;
         } else {
             return TYPE_ITEM;
@@ -52,7 +55,7 @@ public class AdapterMain extends RecyclerView.Adapter<AdapterMain.ViewHolderMain
 
     @Override
     public int getItemCount() {
-        return mData.length;
+        return mData.size();
     }
 
     public class ViewHolderMain extends RecyclerView.ViewHolder {
@@ -60,7 +63,18 @@ public class AdapterMain extends RecyclerView.Adapter<AdapterMain.ViewHolderMain
 
         public ViewHolderMain(View itemView) {
             super(itemView);
+            itemView.setOnClickListener(mOnClickListener);
             mTextView = (TextView) itemView.findViewById(R.id.textView);
         }
+
+        private final View.OnClickListener mOnClickListener = new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                int pos = getAdapterPosition();
+
+                mData.remove(pos);
+                notifyItemRemoved(pos);
+            }
+        };
     }
 }

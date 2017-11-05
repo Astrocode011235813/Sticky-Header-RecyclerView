@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="list_item_size">35dp</dimen>
+    <dimen name="list_header_item_size">45dp</dimen>
+    <dimen name="list_item_padding">5dp</dimen>
+</resources>

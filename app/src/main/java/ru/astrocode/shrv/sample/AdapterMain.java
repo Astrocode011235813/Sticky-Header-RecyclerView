@@ -1,17 +1,25 @@
 package ru.astrocode.shrv.sample;
 
 import android.content.Context;
+import android.content.res.Resources;
 import android.graphics.Color;
 import android.support.v7.widget.RecyclerView;
+import android.text.TextUtils;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 
 import ru.astrocode.shrv.library.SHRVItemType;
+import ru.astrocode.shrv.library.SHRVLinearLayoutManager;
+
+import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
+import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 
 /**
  * Created by Astrocode on 27.03.2017.
@@ -21,22 +29,81 @@ public class AdapterMain extends RecyclerView.Adapter<AdapterMain.ViewHolderMain
     private final static int TYPE_ITEM = 1;
 
     private final Context mContext;
+    private final int mOrientation;
+
+    private final int mHeaderSize,mItemSize;
+    private final int mItemPadding;
+
+    private final int mHeaderColor,mHeaderTextColor;
+    private final int mItemColor,mItemTextColor;
+
     private ArrayList<String> mData;
 
-    public AdapterMain(Context context) {
+    public AdapterMain(Context context,int orientation) {
         mContext = context;
+        mOrientation = orientation;
         mData = new ArrayList<String>(Arrays.asList(context.getResources().getStringArray(R.array.Countries)));
+
+        Resources res =  mContext.getResources();
+
+        mHeaderSize = res.getDimensionPixelSize(R.dimen.list_header_item_size);
+        mItemSize = res.getDimensionPixelSize(R.dimen.list_item_size);
+        mItemPadding = res.getDimensionPixelOffset(R.dimen.list_item_padding);
+
+        mHeaderColor = res.getColor(R.color.list_header_item);
+        mHeaderTextColor = res.getColor(R.color.list_header_item_text);
+
+        mItemColor = res.getColor(R.color.list_item);
+        mItemTextColor = res.getColor(R.color.list_item_text);
     }
 
     @Override
     public AdapterMain.ViewHolderMain onCreateViewHolder(ViewGroup parent, int viewType) {
-        View view = LayoutInflater.from(mContext).inflate(R.layout.item_recyclerview, parent, false);
+        RelativeLayout view = new RelativeLayout(mContext);
 
-        if (viewType == TYPE_HEADER) {
-            view.setBackgroundColor(Color.parseColor("#808080"));
+        ViewGroup.LayoutParams lp = new RelativeLayout.LayoutParams(MATCH_PARENT,MATCH_PARENT);
+        RelativeLayout.LayoutParams textViewLp = new RelativeLayout.LayoutParams(MATCH_PARENT,MATCH_PARENT);
+
+        TextView textView = new TextView(mContext);
+        textView.setEllipsize(TextUtils.TruncateAt.END);
+        textView.setLines(1);
+        textView.setPadding(mItemPadding,mItemPadding,mItemPadding,mItemPadding);
+
+        if(mOrientation == SHRVLinearLayoutManager.VERTICAL){
+            textView.setGravity(Gravity.START|Gravity.CENTER);
+            if (viewType == TYPE_HEADER) {
+                view.setBackgroundColor(mHeaderColor);
+                textView.setTextColor(mHeaderTextColor);
+
+                lp.height = mHeaderSize;
+            }else{
+                view.setBackgroundColor(mItemColor);
+                textView.setTextColor(mItemTextColor);
+
+                lp.height = mItemSize;
+            }
+            lp.width = MATCH_PARENT;
+        }else {
+            textView.setGravity(Gravity.CENTER);
+            if (viewType == TYPE_HEADER) {
+                view.setBackgroundColor(mHeaderColor);
+                textView.setTextColor(mHeaderTextColor);
+
+                lp.width = mHeaderSize;
+            }else{
+                view.setBackgroundColor(mItemColor);
+                textView.setTextColor(mItemTextColor);
+
+                lp.width = WRAP_CONTENT;
+            }
+            lp.height = MATCH_PARENT;
         }
+        view.setLayoutParams(lp);
 
-        return new ViewHolderMain(view);
+
+        view.addView(textView,textViewLp);
+
+        return new ViewHolderMain(view,textView);
     }
 
     @Override
@@ -61,12 +128,12 @@ public class AdapterMain extends RecyclerView.Adapter<AdapterMain.ViewHolderMain
     public class ViewHolderMain extends RecyclerView.ViewHolder {
         TextView mTextView;
 
-        public ViewHolderMain(View itemView) {
+        public ViewHolderMain(View itemView,TextView textView) {
             super(itemView);
-            itemView.setOnClickListener(mOnClickListener);
-            mTextView = (TextView) itemView.findViewById(R.id.textView);
+           // itemView.setOnClickListener(mOnClickListener);
+            mTextView = textView;
         }
-
+/*
         private final View.OnClickListener mOnClickListener = new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -76,5 +143,6 @@ public class AdapterMain extends RecyclerView.Adapter<AdapterMain.ViewHolderMain
                 notifyItemRemoved(pos);
             }
         };
+        */
     }
 }

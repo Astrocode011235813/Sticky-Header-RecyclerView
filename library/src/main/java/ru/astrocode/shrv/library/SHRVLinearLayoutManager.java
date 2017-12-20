@@ -1,7 +1,9 @@
 package ru.astrocode.shrv.library;
 
+import android.graphics.PointF;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.support.v7.widget.LinearSmoothScroller;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
 import android.view.View;
@@ -14,7 +16,7 @@ import java.util.ArrayList;
  * Sticky header linear layout manager.
  */
 
-public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager {
+public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implements RecyclerView.SmoothScroller.ScrollVectorProvider{
     private final static String TAG = "SHRVLinearLayoutManager";
 
     private final static String ERROR_UNKNOWN_ORIENTATION = "Unknown orientation!";
@@ -727,4 +729,27 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager {
         return newView;
     }
 
+    @Override
+    public void smoothScrollToPosition(RecyclerView recyclerView, RecyclerView.State state, int position) {
+        LinearSmoothScroller linearSmoothScroller =
+                new LinearSmoothScroller(recyclerView.getContext());
+        linearSmoothScroller.setTargetPosition(position);
+        startSmoothScroll(linearSmoothScroller);
+    }
+
+    @Override
+    public PointF computeScrollVectorForPosition(int targetPosition) {
+        if (getChildCount() == 0) {
+            return null;
+        }
+
+        final int firstChildPos = getPosition(getChildAt(0));
+        final int direction = targetPosition < firstChildPos ? -1 : 1;
+
+        if (mOrientation == HORIZONTAL) {
+            return new PointF(direction, 0);
+        } else {
+            return new PointF(0, direction);
+        }
+    }
 }

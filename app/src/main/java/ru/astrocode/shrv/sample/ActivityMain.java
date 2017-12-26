@@ -1,12 +1,11 @@
 package ru.astrocode.shrv.sample;
 
-import android.content.pm.ActivityInfo;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
-import android.view.View;
+import android.util.Log;
 
 import ru.astrocode.shrv.library.SHRVLinearLayoutManager;
 
@@ -32,7 +31,14 @@ public class ActivityMain extends AppCompatActivity {
         mRecyclerView = (RecyclerView) findViewById(R.id.recyclerView);
         mRecyclerView.setLayoutManager(new SHRVLinearLayoutManager(orientation));
         mRecyclerView.setAdapter(new AdapterMain(this,orientation));
-
+/*
+        mRecyclerView.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                mRecyclerView.scrollToPosition(10);
+            }
+        },10000);
+*/
     }
 
 }

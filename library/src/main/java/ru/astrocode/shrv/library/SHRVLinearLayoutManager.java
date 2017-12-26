@@ -4,8 +4,9 @@ import android.graphics.PointF;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.support.v7.widget.LinearSmoothScroller;
+import android.support.v7.widget.OrientationHelper;
 import android.support.v7.widget.RecyclerView;
-import android.util.Log;
+import android.util.DisplayMetrics;
 import android.view.View;
 
 import java.util.ArrayList;
@@ -29,15 +30,20 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
     private final static String TAG_ADAPTER_INDEX_OF_FIRST_ITEM = "TAG_ADAPTER_INDEX_OF_FIRST_ITEM";
     private final static String TAG_ADAPTER_INDEX_OF_CURRENT_HEADER = "TAG_ADAPTER_INDEX_OF_CURRENT_HEADER";
 
-    private final static int sTop = 0, sBottom = 1, sLeft = 2, sRight = 3;
+    private final static int sStart = 0, sEnd = 1;
 
-    public final static int VERTICAL = 0, HORIZONTAL = 1;
+    public final static int VERTICAL = OrientationHelper.VERTICAL, HORIZONTAL = OrientationHelper.HORIZONTAL;
 
     private int mStartPointOfFirstItem, mStartPointOfCurrentHeader;
     private int mAdapterIndexOfFirstItem, mAdapterIndexOfCurrentHeader;
+    private int mScrollToPosition;
 
     private int mOrientation;
+
+    private OrientationHelper mOrientationHelper;
     private ArrayList<Integer> mHeadersIndexes;
+
+    private RecyclerView.Adapter mAdapter;
 
     public SHRVLinearLayoutManager(int orientation) {
         setOrientation(orientation);
@@ -48,11 +54,25 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
 
         mStartPointOfCurrentHeader = -1;
         mAdapterIndexOfCurrentHeader = -1;
+
+        mScrollToPosition = -1;
     }
 
     @Override
     public RecyclerView.LayoutParams generateDefaultLayoutParams() {
         return new RecyclerView.LayoutParams(RecyclerView.LayoutParams.WRAP_CONTENT, RecyclerView.LayoutParams.WRAP_CONTENT);
+    }
+
+    @Override
+    public void onAttachedToWindow(RecyclerView view) {
+        super.onAttachedToWindow(view);
+        mAdapter = view.getAdapter();
+    }
+
+    @Override
+    public void onDetachedFromWindow(RecyclerView view, RecyclerView.Recycler recycler) {
+        super.onDetachedFromWindow(view, recycler);
+        mAdapter = null;
     }
 
     @Override
@@ -63,51 +83,155 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
             return;
         }
 
-        detachAndScrapAttachedViews(recycler);
+        if(mScrollToPosition != -1 && !isTargetViewInVisibleArea(mScrollToPosition)) {
 
-        if (mStartPointOfFirstItem == -1) {
-            mStartPointOfFirstItem = mOrientation == VERTICAL ? getPaddingTop() : getPaddingLeft();
+            detachAndScrapAttachedViews(recycler);
+
+            if (mScrollToPosition < mAdapterIndexOfFirstItem) {
+                fillViewFromScrollPositionToEnd(recycler);
+            } else if (mScrollToPosition > mAdapterIndexOfFirstItem) {
+                fillViewFromScrollPositionToStart(recycler);
+            }
+
+            rememberCurrentState();
+
+        }else {
+
+            detachAndScrapAttachedViews(recycler);
+
+            if (mStartPointOfFirstItem == -1) {
+                mStartPointOfFirstItem = mOrientationHelper.getStartAfterPadding();
+            }
+
+            if (mAdapterIndexOfCurrentHeader != -1) {
+                addViewTo(sEnd, mAdapterIndexOfCurrentHeader, 0, mStartPointOfCurrentHeader, recycler);
+            }
+
+            fill(recycler);
+        }
+    }
+
+    @Override
+    public void onLayoutCompleted(RecyclerView.State state) {
+        mScrollToPosition = -1;
+    }
+
+    private boolean isTargetViewInVisibleArea(int targetViewAdapterPosition){
+        boolean isInVisibleArea = false;
+        int childCount = getChildCount();
+
+        if(childCount > 0){
+            View firstChild = getChildAt(0),lastChild = getChildAt(childCount-1),preLastChild;
+
+            int biggestAdapterPosition = getPosition(firstChild);
+            int lowestAdapterPosition = getPosition(lastChild);
+
+            if(childCount > 1){
+                if(getItemViewType(lastChild) == SHRVItemType.TYPE_HEADER) {
+                    preLastChild = getChildAt(childCount-2);
+
+                    if(Math.abs(getPosition(lastChild) - getPosition(preLastChild)) > 1){
+                        lowestAdapterPosition = getPosition(preLastChild);
+                    }
+                }
+            }
+
+            isInVisibleArea = targetViewAdapterPosition <= biggestAdapterPosition && targetViewAdapterPosition >= lowestAdapterPosition;
         }
 
-        if (mAdapterIndexOfCurrentHeader != -1) {
-            if (mOrientation == VERTICAL) {
-                addViewTo(sBottom, mAdapterIndexOfCurrentHeader, 0, mStartPointOfCurrentHeader, recycler);
-            } else {
-                addViewTo(sRight, mAdapterIndexOfCurrentHeader, 0, mStartPointOfCurrentHeader, recycler);
+        return isInVisibleArea;
+    }
+
+    private int findCurrentHeaderFromBottom(int currentTopViewAdapterPosition){
+        int currentHeaderPosition = mAdapterIndexOfCurrentHeader == -1?0:mAdapterIndexOfCurrentHeader;
+
+        for (int i = currentHeaderPosition; i <= currentTopViewAdapterPosition; i++) {
+            if(mAdapter.getItemViewType(i) == SHRVItemType.TYPE_HEADER){
+                if(currentHeaderPosition != i){
+                    mHeadersIndexes.add(currentHeaderPosition);
+                }
+                currentHeaderPosition = i;
             }
         }
 
-        if (mOrientation == VERTICAL) {
-            initVertical(recycler);
-        } else {
-            initHorizontal(recycler);
-        }
-
+        return currentHeaderPosition;
     }
 
-    private void initVertical(RecyclerView.Recycler recycler) {
-        int currentY = mStartPointOfFirstItem;
+    private void fillViewFromScrollPositionToStart(RecyclerView.Recycler recycler){
+        int currentCoordinate = mOrientationHelper.getEndAfterPadding();
 
-        for (int i = mAdapterIndexOfFirstItem; i < getItemCount(); i++) {
-            View child = addViewTo(sBottom, i, 0, currentY, recycler);
+        for(int i = mScrollToPosition; i >= 0; i--) {
+            View child = addViewTo(sStart, i, -1, currentCoordinate, recycler);
+            currentCoordinate = mOrientationHelper.getDecoratedStart(child);
 
-            currentY = getDecoratedBottom(child);
+            if (currentCoordinate <= mOrientationHelper.getStartAfterPadding()) {
+                mAdapterIndexOfCurrentHeader = findCurrentHeaderFromBottom(i);
 
-            if (currentY >= getHeight() - getPaddingBottom()) {
+                if(mAdapter.getItemViewType(i + 1) == SHRVItemType.TYPE_HEADER){
+                    if(mAdapterIndexOfCurrentHeader != i){
+                        addViewTo(sEnd,mAdapterIndexOfCurrentHeader,-1,mOrientationHelper.getDecoratedStart(child),recycler);
+                    }
+                }else {
+                    if(mAdapterIndexOfCurrentHeader == i){
+                        mOrientationHelper.offsetChild(child,-mOrientationHelper.getDecoratedStart(child));
+                    }else {
+                        addViewTo(sEnd,mAdapterIndexOfCurrentHeader,-1,mOrientationHelper.getStartAfterPadding(),recycler);
+                    }
+                }
                 break;
             }
         }
     }
 
-    private void initHorizontal(RecyclerView.Recycler recycler) {
-        int currentX = mStartPointOfFirstItem;
+    private int findCurrentHeaderFromTop(int currentTopViewAdapterPosition){
+        int currentHeaderPosition = mAdapterIndexOfCurrentHeader;
+
+        for (int i = mAdapterIndexOfCurrentHeader; i >= 0; i--) {
+            if (mHeadersIndexes.remove((Integer) i)) {
+                currentHeaderPosition = i;
+                if (i <= currentTopViewAdapterPosition) {
+                    break;
+                }
+            }
+        }
+
+        return  currentHeaderPosition;
+    }
+
+    private void fillViewFromScrollPositionToEnd(RecyclerView.Recycler recycler){
+        int currentCoordinate = mOrientationHelper.getStartAfterPadding();
+
+        for(int i = mScrollToPosition; i < getItemCount(); i++) {
+            View child = addViewTo(sEnd, i, 0, currentCoordinate, recycler);
+            currentCoordinate = mOrientationHelper.getDecoratedEnd(child);
+
+            if(i == mScrollToPosition) {
+                mAdapterIndexOfCurrentHeader = findCurrentHeaderFromTop(i);
+
+                if (mAdapterIndexOfCurrentHeader != i) {
+                    child = addViewTo(sEnd, mAdapterIndexOfCurrentHeader, -1, mOrientationHelper.getStartAfterPadding(), recycler);
+                    for (int j = getChildCount() - 2; j >= 0; j--) {
+                        mOrientationHelper.offsetChild(getChildAt(j),mOrientationHelper.getDecoratedMeasurement(child));
+                    }
+                    currentCoordinate += mOrientationHelper.getDecoratedMeasurement(child);
+                }
+            }
+
+            if (currentCoordinate >= mOrientationHelper.getEndAfterPadding()) {
+                break;
+            }
+        }
+    }
+
+    private void fill(RecyclerView.Recycler recycler){
+        int currentCoordinate = mStartPointOfFirstItem;
 
         for (int i = mAdapterIndexOfFirstItem; i < getItemCount(); i++) {
-            View child = addViewTo(sRight, i, 0, currentX, recycler);
+            View child = addViewTo(sEnd, i, 0, currentCoordinate, recycler);
 
-            currentX = getDecoratedRight(child);
+            currentCoordinate = mOrientationHelper.getDecoratedEnd(child);
 
-            if (currentX >= getWidth() - getPaddingRight()) {
+            if (currentCoordinate >= mOrientationHelper.getEndAfterPadding()) {
                 break;
             }
         }
@@ -127,49 +251,35 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
         assertNotInLayoutOrScroll(null);
 
         if (orientation == mOrientation) {
+            if(mOrientationHelper == null){
+                mOrientationHelper = OrientationHelper.createOrientationHelper(this,orientation);
+            }
             return;
         }
 
         mOrientation = orientation;
+        mOrientationHelper = OrientationHelper.createOrientationHelper(this,orientation);
+
         requestLayout();
     }
 
-    private void rememberCurrentStateVertical() {
+    private void rememberCurrentState(){
         View firstView = getChildAt(getChildCount() - 1);
 
         if (getItemViewType(firstView) == SHRVItemType.TYPE_HEADER) {
             mAdapterIndexOfCurrentHeader = getPosition(firstView);
-            mStartPointOfCurrentHeader = getDecoratedTop(firstView);
+            mStartPointOfCurrentHeader = mOrientationHelper.getDecoratedStart(firstView);
 
             View secondView = getChildAt(getChildCount() - 2);
             if (secondView != null) {
                 mAdapterIndexOfFirstItem = getPosition(secondView);
-                mStartPointOfFirstItem = getDecoratedTop(secondView);
+                mStartPointOfFirstItem = mOrientationHelper.getDecoratedStart(secondView);
             }
-        } else {
+        }else{
             mAdapterIndexOfFirstItem = getPosition(firstView);
-            mStartPointOfFirstItem = getDecoratedTop(firstView);
+            mStartPointOfFirstItem = mOrientationHelper.getDecoratedStart(firstView);
         }
     }
-
-    private void rememberCurrentStateHorizontal() {
-        View firstView = getChildAt(getChildCount() - 1);
-
-        if (getItemViewType(firstView) == SHRVItemType.TYPE_HEADER) {
-            mAdapterIndexOfCurrentHeader = getPosition(firstView);
-            mStartPointOfCurrentHeader = getDecoratedLeft(firstView);
-
-            View secondView = getChildAt(getChildCount() - 2);
-            if (secondView != null) {
-                mAdapterIndexOfFirstItem = getPosition(secondView);
-                mStartPointOfFirstItem = getDecoratedLeft(secondView);
-            }
-        } else {
-            mAdapterIndexOfFirstItem = getPosition(firstView);
-            mStartPointOfFirstItem = getDecoratedLeft(firstView);
-        }
-    }
-
 
     @Override
     public boolean canScrollVertically() {
@@ -186,16 +296,18 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
         int offset = 0;
         int childCount = getChildCount();
 
-        if (childCount > 0 && dy > 0) {
-            offset = addViewsToBottom(dy, recycler);
+        if(childCount > 0){
+            if (dy > 0) {
+                offset = addViewsToEnd(dy, recycler);
 
-            offsetToBottomAndDelete(offset, recycler);
-            rememberCurrentStateVertical();
-        } else if (childCount > 0 && dy < 0) {
-            offset = addViewsToTop(dy, recycler);
+                offsetToBottomAndDelete(offset, recycler);
+                rememberCurrentState();
+            } else if (dy < 0) {
+                offset = addViewsToStart(dy, recycler);
 
-            offsetToTopAndDelete(offset, recycler);
-            rememberCurrentStateVertical();
+                offsetToTopAndDelete(offset, recycler);
+                rememberCurrentState();
+            }
         }
 
         return offset;
@@ -206,16 +318,18 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
         int offset = 0;
         int childCount = getChildCount();
 
-        if (childCount > 0 && dx > 0) {
-            offset = addViewsToRight(dx, recycler);
+        if(childCount > 0){
+            if (dx > 0) {
+                offset = addViewsToEnd(dx, recycler);
 
-            offsetToRightAndDelete(offset, recycler);
-            rememberCurrentStateHorizontal();
-        } else if (childCount > 0 && dx < 0) {
-            offset = addViewsToLeft(dx, recycler);
+                offsetToRightAndDelete(offset, recycler);
+                rememberCurrentState();
+            } else if (dx < 0) {
+                offset = addViewsToStart(dx, recycler);
 
-            offsetToLeftAndDelete(offset, recycler);
-            rememberCurrentStateHorizontal();
+                offsetToLeftAndDelete(offset, recycler);
+                rememberCurrentState();
+            }
         }
 
         return offset;
@@ -257,28 +371,29 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
     }
 
     /**
-     * Add views (if need ) to the top of the recyclerView and return maximum possible offset(not above the original offset).
+     * Add views (if need ) to the end of the recyclerView and return maximum possible offset(not above the original offset).
      *
-     * @param dx       Original offset.
+     * @param offset       Original offset.
      * @param recycler {@link android.support.v7.widget.RecyclerView.Recycler} to get view.
      * @return
      */
-    private int addViewsToRight(int dx, RecyclerView.Recycler recycler) {
+    private int addViewsToEnd(int offset, RecyclerView.Recycler recycler) {
         View currentLastView = getChildAt(0);
 
-        int currentAvailableOffset = getDecoratedRight(currentLastView) > (getWidth() - getPaddingRight()) ? getDecoratedRight(currentLastView) - (getWidth() - getPaddingRight()) : 0;
+        int currentAvailableOffset = mOrientationHelper.getDecoratedEnd(currentLastView) > mOrientationHelper.getEndAfterPadding()
+                ? mOrientationHelper.getDecoratedEnd(currentLastView) - mOrientationHelper.getEndAfterPadding():0;
         int currentAdapterIndex = getPosition(currentLastView) + 1;
 
-        while (currentAdapterIndex <= getItemCount() - 1 && currentAvailableOffset < dx) {
-            View newView = addViewTo(sRight, currentAdapterIndex, 0, getDecoratedRight(currentLastView), recycler);
+        while (currentAdapterIndex <= getItemCount() - 1 && currentAvailableOffset < offset) {
+            View newView = addViewTo(sEnd, currentAdapterIndex, 0, mOrientationHelper.getDecoratedEnd(currentLastView), recycler);
 
             currentLastView = newView;
-            currentAvailableOffset += getDecoratedMeasuredWidth(newView);
+            currentAvailableOffset += mOrientationHelper.getDecoratedMeasurement(newView);
 
             currentAdapterIndex++;
         }
 
-        return currentAvailableOffset > dx ? dx : currentAvailableOffset;
+        return currentAvailableOffset > offset ? offset : currentAvailableOffset;
     }
 
     /**
@@ -337,58 +452,60 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
     }
 
     /**
-     * Add views (if need ) to the left of the recyclerView and return maximum possible offset(not below the original offset).
+     * Add views (if need ) to the start of the recyclerView and return maximum possible offset(not below the original offset).
      *
-     * @param dx       Original offset.
+     * @param offset       Original offset.
      * @param recycler {@link android.support.v7.widget.RecyclerView.Recycler} to get view.
      * @return
      */
-    private int addViewsToLeft(int dx, RecyclerView.Recycler recycler) {
+    private int addViewsToStart(int offset, RecyclerView.Recycler recycler) {
         View currentHeader = null, currentFirstView = getChildAt(getChildCount() - 1);
 
-        int currentLeft = getDecoratedLeft(currentFirstView);
+        int currentStart = mOrientationHelper.getDecoratedStart(currentFirstView);
 
-        int currentAvailableOffset = getDecoratedLeft(currentFirstView);
+        int currentAvailableOffset = currentStart;
         int currentAdapterIndex = getPosition(currentFirstView) - 1;
+
 
         if (getItemViewType(currentFirstView) == SHRVItemType.TYPE_HEADER) {
             View subViewHeader = getChildAt(getChildCount() - 2);
 
             if (subViewHeader != null && getItemViewType(subViewHeader) != SHRVItemType.TYPE_HEADER) {
                 if (getPosition(subViewHeader) - getPosition(currentFirstView) == 1) {
-                    currentAvailableOffset = getDecoratedLeft(subViewHeader) - (getDecoratedMeasuredWidth(currentFirstView) + getPaddingLeft());
-                    currentLeft = getDecoratedLeft(subViewHeader) - getDecoratedMeasuredWidth(currentFirstView);
+                    currentAvailableOffset = mOrientationHelper.getDecoratedStart(subViewHeader) - (mOrientationHelper.getDecoratedMeasurement(currentFirstView) + mOrientationHelper.getStartAfterPadding());
+                    currentStart = mOrientationHelper.getDecoratedStart(subViewHeader) - mOrientationHelper.getDecoratedMeasurement(currentFirstView);
                 } else {
                     currentAdapterIndex = getPosition(subViewHeader) - 1;
-                    currentAvailableOffset = currentLeft = getDecoratedLeft(subViewHeader);
+                    currentAvailableOffset = currentStart = mOrientationHelper.getDecoratedStart(subViewHeader);
                 }
             }
             currentHeader = currentFirstView;
         }
 
-        while (currentAdapterIndex >= 0 && currentAvailableOffset > dx) {
+        while (currentAdapterIndex >= 0 && currentAvailableOffset > offset) {
             if (currentHeader != null) {
                 if (getPosition(currentHeader) > currentAdapterIndex) {
                     if (mHeadersIndexes.size() > 0) {
-                        currentHeader = addViewTo(sLeft, mHeadersIndexes.remove(mHeadersIndexes.size() - 1), -1, currentLeft, recycler);
+                        currentHeader = addViewTo(sStart, mHeadersIndexes.remove(mHeadersIndexes.size() - 1), -1, currentStart, recycler);
                     } else {
                         currentHeader = null;
                     }
                 } else if (getPosition(currentHeader) == currentAdapterIndex) {
-                    currentAvailableOffset -= getDecoratedMeasuredWidth(currentHeader);
-                    currentLeft -= getDecoratedMeasuredWidth(currentHeader);
+                    currentAvailableOffset -= mOrientationHelper.getDecoratedMeasurement(currentHeader);
+                    currentStart -= mOrientationHelper.getDecoratedMeasurement(currentHeader);
                     currentAdapterIndex--;
                     continue;
                 }
             }
-            View newView = addViewTo(sLeft, currentAdapterIndex, currentHeader != null ? getChildCount() - 1 : -1, currentLeft, recycler);
 
-            currentLeft = getDecoratedLeft(newView);
-            currentAvailableOffset -= getDecoratedMeasuredWidth(newView);
+            View newView = addViewTo(sStart, currentAdapterIndex, currentHeader != null ? getChildCount() - 1 : -1, currentStart, recycler);
+
+            currentStart = mOrientationHelper.getDecoratedStart(newView);
+            currentAvailableOffset -= mOrientationHelper.getDecoratedMeasurement(newView);
             currentAdapterIndex--;
         }
 
-        return currentAvailableOffset < dx ? dx : currentAvailableOffset;
+        return currentAvailableOffset < offset ? offset : currentAvailableOffset;
     }
 
     /**
@@ -464,61 +581,6 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
         }
     }
 
-    /**
-     * Add views (if need ) to the top of the recyclerView and return maximum possible offset(not below the original offset).
-     *
-     * @param dy       Original offset.
-     * @param recycler {@link android.support.v7.widget.RecyclerView.Recycler} to get view.
-     * @return
-     */
-    private int addViewsToTop(int dy, RecyclerView.Recycler recycler) {
-        View currentHeader = null, currentFirstView = getChildAt(getChildCount() - 1);
-
-        int currentTop = getDecoratedTop(currentFirstView);
-
-        int currentAvailableOffset = getDecoratedTop(currentFirstView);
-        int currentAdapterIndex = getPosition(currentFirstView) - 1;
-
-        if (getItemViewType(currentFirstView) == SHRVItemType.TYPE_HEADER) {
-            View subViewHeader = getChildAt(getChildCount() - 2);
-
-            if (subViewHeader != null && getItemViewType(subViewHeader) != SHRVItemType.TYPE_HEADER) {
-                if (getPosition(subViewHeader) - getPosition(currentFirstView) == 1) {
-                    currentAvailableOffset = getDecoratedTop(subViewHeader) - (getDecoratedMeasuredHeight(currentFirstView) + getPaddingTop());
-                    currentTop = getDecoratedTop(subViewHeader) - getDecoratedMeasuredHeight(currentFirstView);
-                } else {
-                    currentAdapterIndex = getPosition(subViewHeader) - 1;
-                    currentAvailableOffset = currentTop = getDecoratedTop(subViewHeader);
-                }
-            }
-            currentHeader = currentFirstView;
-        }
-
-
-        while (currentAdapterIndex >= 0 && currentAvailableOffset > dy) {
-            if (currentHeader != null) {
-                if (getPosition(currentHeader) > currentAdapterIndex) {
-                    if (mHeadersIndexes.size() > 0) {
-                        currentHeader = addViewTo(sTop, mHeadersIndexes.remove(mHeadersIndexes.size() - 1), -1, currentTop, recycler);
-                    } else {
-                        currentHeader = null;
-                    }
-                } else if (getPosition(currentHeader) == currentAdapterIndex) {
-                    currentAvailableOffset -= getDecoratedMeasuredHeight(currentHeader);
-                    currentTop -= getDecoratedMeasuredHeight(currentHeader);
-                    currentAdapterIndex--;
-                    continue;
-                }
-            }
-            View newView = addViewTo(sTop, currentAdapterIndex, currentHeader != null ? getChildCount() - 1 : -1, currentTop, recycler);
-
-            currentTop = getDecoratedTop(newView);
-            currentAvailableOffset -= getDecoratedMeasuredHeight(newView);
-            currentAdapterIndex--;
-        }
-
-        return currentAvailableOffset < dy ? dy : currentAvailableOffset;
-    }
 
     /**
      * Scroll content to top.All view that reached out of the screen are recycled.
@@ -593,30 +655,7 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
         }
     }
 
-    /**
-     * Add views (if need ) to the bottom of the recyclerView and return maximum possible offset(not above the original offset).
-     *
-     * @param dy       Original offset.
-     * @param recycler {@link android.support.v7.widget.RecyclerView.Recycler} to get view.
-     * @return
-     */
-    private int addViewsToBottom(int dy, RecyclerView.Recycler recycler) {
-        View currentLastView = getChildAt(0);
 
-        int currentAvailableOffset = getDecoratedBottom(currentLastView) > getHeight() - getPaddingBottom() ? getDecoratedBottom(currentLastView) - (getHeight() - getPaddingBottom()) : 0;
-        int currentAdapterIndex = getPosition(currentLastView) + 1;
-
-        while (currentAdapterIndex <= getItemCount() - 1 && currentAvailableOffset < dy) {
-            View newView = addViewTo(sBottom, currentAdapterIndex, 0, getDecoratedBottom(currentLastView), recycler);
-
-            currentLastView = newView;
-            currentAvailableOffset += getDecoratedMeasuredHeight(newView);
-
-            currentAdapterIndex++;
-        }
-
-        return currentAvailableOffset > dy ? dy : currentAvailableOffset;
-    }
 
     /**
      * Scroll content to bottom.All view that reached out of the screen are recycled.
@@ -696,29 +735,31 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
         measureChildWithMargins(newView, 0, 0);
 
         switch (destination) {
-            case sTop:
-                left = getPaddingLeft();
-                top = value - getDecoratedMeasuredHeight(newView);
-                right = left + getDecoratedMeasuredWidth(newView);
-                bottom = value;
+            case sStart:
+                if(mOrientation == VERTICAL){
+                    left = getPaddingLeft();
+                    top = value - getDecoratedMeasuredHeight(newView);
+                    right = left + getDecoratedMeasuredWidth(newView);
+                    bottom = value;
+                }else{
+                    left = value - getDecoratedMeasuredWidth(newView);
+                    top = getPaddingTop();
+                    right = value;
+                    bottom = top + getDecoratedMeasuredHeight(newView);
+                }
                 break;
-            case sBottom:
-                left = getPaddingLeft();
-                top = value;
-                right = left + getDecoratedMeasuredWidth(newView);
-                bottom = value + getDecoratedMeasuredHeight(newView);
-                break;
-            case sLeft:
-                left = value - getDecoratedMeasuredWidth(newView);
-                top = getPaddingTop();
-                right = value;
-                bottom = top + getDecoratedMeasuredHeight(newView);
-                break;
-            case sRight:
-                left = value;
-                top = getPaddingTop();
-                right = value + getDecoratedMeasuredWidth(newView);
-                bottom = top + getDecoratedMeasuredHeight(newView);
+            case sEnd:
+                if(mOrientation == VERTICAL){
+                    left = getPaddingLeft();
+                    top = value;
+                    right = left + getDecoratedMeasuredWidth(newView);
+                    bottom = value + getDecoratedMeasuredHeight(newView);
+                }else{
+                    left = value;
+                    top = getPaddingTop();
+                    right = value + getDecoratedMeasuredWidth(newView);
+                    bottom = top + getDecoratedMeasuredHeight(newView);
+                }
                 break;
             default:
                 throw new IllegalArgumentException(ERROR_UNKNOWN_DESTINATION_CODE);
@@ -730,9 +771,32 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
     }
 
     @Override
+    public void scrollToPosition(int position) {
+        if(position >= 0 && position <= getItemCount()-1){
+            mScrollToPosition = position;
+            requestLayout();
+        }
+    }
+
+    @Override
     public void smoothScrollToPosition(RecyclerView recyclerView, RecyclerView.State state, int position) {
-        LinearSmoothScroller linearSmoothScroller =
-                new LinearSmoothScroller(recyclerView.getContext());
+       // LinearSmoothScroller linearSmoothScroller =
+             //   new LinearSmoothScroller(recyclerView.getContext());
+        final LinearSmoothScroller linearSmoothScroller = new LinearSmoothScroller(recyclerView.getContext()) {
+                    private static final float MILLISECONDS_PER_INCH = 100f;
+
+                    @Override
+                    public PointF computeScrollVectorForPosition(int targetPosition) {
+                        return SHRVLinearLayoutManager.this
+                                .computeScrollVectorForPosition(targetPosition);
+                    }
+
+                    @Override
+                    protected float calculateSpeedPerPixel
+                            (DisplayMetrics displayMetrics) {
+                        return MILLISECONDS_PER_INCH / displayMetrics.densityDpi;
+                    }
+                };
         linearSmoothScroller.setTargetPosition(position);
         startSmoothScroll(linearSmoothScroller);
     }

@@ -3,6 +3,7 @@ package ru.astrocode.shrv.sample;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Color;
+import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.text.TextUtils;
 import android.view.Gravity;

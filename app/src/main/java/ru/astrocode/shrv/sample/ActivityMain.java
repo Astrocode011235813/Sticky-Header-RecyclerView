@@ -31,14 +31,7 @@ public class ActivityMain extends AppCompatActivity {
         mRecyclerView = (RecyclerView) findViewById(R.id.recyclerView);
         mRecyclerView.setLayoutManager(new SHRVLinearLayoutManager(orientation));
         mRecyclerView.setAdapter(new AdapterMain(this,orientation));
-/*
-        mRecyclerView.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                mRecyclerView.scrollToPosition(10);
-            }
-        },10000);
-*/
+
     }
 
 }

@@ -1,5 +1,6 @@
 package ru.astrocode.shrv.library;
 
+import android.content.Context;
 import android.graphics.PointF;
 import android.os.Bundle;
 import android.os.Parcelable;
@@ -7,6 +8,7 @@ import android.support.v7.widget.LinearSmoothScroller;
 import android.support.v7.widget.OrientationHelper;
 import android.support.v7.widget.RecyclerView;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.View;
 
 import java.util.ArrayList;
@@ -771,6 +773,22 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
     }
 
     @Override
+    public View findViewByPosition(int position) {
+        View view = super.findViewByPosition(position);
+        if(view != null){
+            View lastChild = getChildAt(getChildCount() - 1);
+            if(view == lastChild && getItemViewType(view) == SHRVItemType.TYPE_HEADER) {
+                if (getChildCount() > 1) {
+                    if (Math.abs(position - getPosition(getChildAt(getChildCount() - 2))) > 1) {
+                        view = null;
+                    }
+                }
+            }
+        }
+        return view;
+    }
+
+    @Override
     public void scrollToPosition(int position) {
         if(position >= 0 && position <= getItemCount()-1){
             mScrollToPosition = position;
@@ -780,23 +798,8 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
 
     @Override
     public void smoothScrollToPosition(RecyclerView recyclerView, RecyclerView.State state, int position) {
-       // LinearSmoothScroller linearSmoothScroller =
-             //   new LinearSmoothScroller(recyclerView.getContext());
-        final LinearSmoothScroller linearSmoothScroller = new LinearSmoothScroller(recyclerView.getContext()) {
-                    private static final float MILLISECONDS_PER_INCH = 100f;
+        final SHRVLinearSmoothScroller linearSmoothScroller = new SHRVLinearSmoothScroller(recyclerView.getContext());
 
-                    @Override
-                    public PointF computeScrollVectorForPosition(int targetPosition) {
-                        return SHRVLinearLayoutManager.this
-                                .computeScrollVectorForPosition(targetPosition);
-                    }
-
-                    @Override
-                    protected float calculateSpeedPerPixel
-                            (DisplayMetrics displayMetrics) {
-                        return MILLISECONDS_PER_INCH / displayMetrics.densityDpi;
-                    }
-                };
         linearSmoothScroller.setTargetPosition(position);
         startSmoothScroll(linearSmoothScroller);
     }
@@ -815,5 +818,52 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
         } else {
             return new PointF(0, direction);
         }
+    }
+
+    public class SHRVLinearSmoothScroller extends LinearSmoothScroller{
+
+        public SHRVLinearSmoothScroller(Context context) {
+            super(context);
+        }
+
+        private static final float MILLISECONDS_PER_INCH = 100f;
+
+        @Override
+        public PointF computeScrollVectorForPosition(int targetPosition) {
+            return SHRVLinearLayoutManager.this
+                    .computeScrollVectorForPosition(targetPosition);
+        }
+
+        @Override
+        protected float calculateSpeedPerPixel
+                (DisplayMetrics displayMetrics) {
+            return MILLISECONDS_PER_INCH / displayMetrics.densityDpi;
+        }
+
+        @Override
+        protected void onChildAttachedToWindow(View child) {
+            int childAdapterPosition = getChildPosition(child);
+            if (childAdapterPosition == getTargetPosition()) {
+                if (getItemViewType(child) == SHRVItemType.TYPE_HEADER) {
+                    int childCount = getChildCount();
+                    View lastChild = getChildAt(childCount - 1);
+
+                    if (child == lastChild) {
+                        if (childCount > 1) {
+                            if (Math.abs(getChildPosition(getChildAt(childCount - 2)) - childAdapterPosition) == 1) {
+                                super.onChildAttachedToWindow(child);
+                            } else {
+                                super.onChildAttachedToWindow(null);
+                            }
+                        }
+                    }else {
+                        super.onChildAttachedToWindow(child);
+                    }
+                } else {
+                    super.onChildAttachedToWindow(child);
+                }
+            }
+        }
+
     }
 }

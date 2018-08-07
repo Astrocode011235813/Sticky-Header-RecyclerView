@@ -696,6 +696,24 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
         }
     }
 
+    public int findLastVisibleItemPosition(){
+        View lastVisibleView = null;
+
+        int childCount = getChildCount();
+        int currentChildIndex = 0;
+
+        while(lastVisibleView == null && currentChildIndex < childCount){
+            View view = getChildAt(currentChildIndex);
+            if(mOrientationHelper.getDecoratedEnd(view) > mOrientationHelper.getStartAfterPadding() &&
+                    mOrientationHelper.getDecoratedStart(view) < mOrientationHelper.getEndAfterPadding()){
+                lastVisibleView = view;
+            }
+            currentChildIndex++;
+        }
+
+        return lastVisibleView != null?getPosition(lastVisibleView):-1;
+    }
+
     public class SHRVLinearSmoothScroller extends LinearSmoothScroller{
 
         public SHRVLinearSmoothScroller(Context context) {

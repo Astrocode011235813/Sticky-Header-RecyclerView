@@ -18,10 +18,7 @@ import java.util.ArrayList;
  * <p>
  * Sticky header linear layout manager.
  */
-
-public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implements RecyclerView.SmoothScroller.ScrollVectorProvider{
-    private final static String TAG = "SHRVLinearLayoutManager";
-
+public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implements RecyclerView.SmoothScroller.ScrollVectorProvider {
     private final static String ERROR_UNKNOWN_ORIENTATION = "Unknown orientation!";
     private final static String ERROR_WRONG_CLASS_TYPE = "Wrong class type!";
     private final static String ERROR_UNKNOWN_DESTINATION_CODE = "Unknown destination code!";
@@ -46,6 +43,7 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
     private ArrayList<Integer> mHeadersIndexes;
 
     private RecyclerView.Adapter mAdapter;
+
 
     public SHRVLinearLayoutManager(int orientation) {
         setOrientation(orientation);
@@ -85,9 +83,9 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
             return;
         }
 
-        if(mScrollToPosition != -1 && !isTargetViewInVisibleArea(mScrollToPosition)) {
+        detachAndScrapAttachedViews(recycler);
 
-            detachAndScrapAttachedViews(recycler);
+        if(mScrollToPosition != -1 && !isTargetViewInVisibleArea(mScrollToPosition)) {
 
             if (mScrollToPosition < mAdapterIndexOfFirstItem) {
                 fillViewFromScrollPositionToEnd(recycler);
@@ -99,17 +97,22 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
 
         }else {
 
-            detachAndScrapAttachedViews(recycler);
-
-            if (mStartPointOfFirstItem == -1) {
-                mStartPointOfFirstItem = mOrientationHelper.getStartAfterPadding();
-            }
-
             if (mAdapterIndexOfCurrentHeader != -1) {
                 addViewTo(sEnd, mAdapterIndexOfCurrentHeader, 0, mStartPointOfCurrentHeader, recycler);
             }
 
-            fill(recycler);
+            int currentCoordinate = mStartPointOfFirstItem == -1 ? mOrientationHelper.getStartAfterPadding()
+                    : mStartPointOfFirstItem;
+
+            for (int i = mAdapterIndexOfFirstItem; i < getItemCount(); i++) {
+                View child = addViewTo(sEnd, i, 0, currentCoordinate, recycler);
+
+                currentCoordinate = mOrientationHelper.getDecoratedEnd(child);
+
+                if (currentCoordinate >= mOrientationHelper.getEndAfterPadding()) {
+                    break;
+                }
+            }
         }
     }
 
@@ -225,20 +228,6 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
         }
     }
 
-    private void fill(RecyclerView.Recycler recycler){
-        int currentCoordinate = mStartPointOfFirstItem;
-
-        for (int i = mAdapterIndexOfFirstItem; i < getItemCount(); i++) {
-            View child = addViewTo(sEnd, i, 0, currentCoordinate, recycler);
-
-            currentCoordinate = mOrientationHelper.getDecoratedEnd(child);
-
-            if (currentCoordinate >= mOrientationHelper.getEndAfterPadding()) {
-                break;
-            }
-        }
-    }
-
     /**
      * Change orientation of the layout manager
      *
@@ -253,14 +242,14 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
         assertNotInLayoutOrScroll(null);
 
         if (orientation == mOrientation) {
-            if(mOrientationHelper == null){
-                mOrientationHelper = OrientationHelper.createOrientationHelper(this,orientation);
+            if (mOrientationHelper == null) {
+                mOrientationHelper = OrientationHelper.createOrientationHelper(this, orientation);
             }
             return;
         }
 
         mOrientation = orientation;
-        mOrientationHelper = OrientationHelper.createOrientationHelper(this,orientation);
+        mOrientationHelper = OrientationHelper.createOrientationHelper(this, orientation);
 
         requestLayout();
     }
@@ -298,18 +287,24 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
         int offset = 0;
         int childCount = getChildCount();
 
-        if(childCount > 0){
+        if (childCount > 0) {
             if (dy > 0) {
                 offset = addViewsToEnd(dy, recycler);
 
-                offsetToBottomAndDelete(offset, recycler);
-                rememberCurrentState();
+                if (offset > 0) {
+                    offsetToStart(offset);
+                }
             } else if (dy < 0) {
                 offset = addViewsToStart(dy, recycler);
 
-                offsetToTopAndDelete(offset, recycler);
-                rememberCurrentState();
+                if (offset < 0) {
+                    offsetToEnd(offset);
+                }
+            }else{
+                return offset;
             }
+            deleteInvisibleViews(recycler);
+            rememberCurrentState();
         }
 
         return offset;
@@ -320,18 +315,25 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
         int offset = 0;
         int childCount = getChildCount();
 
-        if(childCount > 0){
+        if (childCount > 0) {
             if (dx > 0) {
                 offset = addViewsToEnd(dx, recycler);
 
-                offsetToRightAndDelete(offset, recycler);
-                rememberCurrentState();
+                if (offset > 0) {
+                    offsetToStart(offset);
+                }
+
             } else if (dx < 0) {
                 offset = addViewsToStart(dx, recycler);
 
-                offsetToLeftAndDelete(offset, recycler);
-                rememberCurrentState();
+                if (offset < 0) {
+                    offsetToEnd(offset);
+                }
+            }else {
+                return offset;
             }
+            deleteInvisibleViews(recycler);
+            rememberCurrentState();
         }
 
         return offset;
@@ -375,7 +377,7 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
     /**
      * Add views (if need ) to the end of the recyclerView and return maximum possible offset(not above the original offset).
      *
-     * @param offset       Original offset.
+     * @param offset   Original offset.
      * @param recycler {@link android.support.v7.widget.RecyclerView.Recycler} to get view.
      * @return
      */
@@ -383,7 +385,7 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
         View currentLastView = getChildAt(0);
 
         int currentAvailableOffset = mOrientationHelper.getDecoratedEnd(currentLastView) > mOrientationHelper.getEndAfterPadding()
-                ? mOrientationHelper.getDecoratedEnd(currentLastView) - mOrientationHelper.getEndAfterPadding():0;
+                ? mOrientationHelper.getDecoratedEnd(currentLastView) - mOrientationHelper.getEndAfterPadding() : 0;
         int currentAdapterIndex = getPosition(currentLastView) + 1;
 
         while (currentAdapterIndex <= getItemCount() - 1 && currentAvailableOffset < offset) {
@@ -399,64 +401,61 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
     }
 
     /**
-     * Scroll content to right.All view that reached out of the screen are recycled.
+     * Scroll content to end(bottom or right).
      *
      * @param offset   The value to which we must scroll the content.
-     * @param recycler {@link android.support.v7.widget.RecyclerView.Recycler} to get or recycle view.
      */
-    private void offsetToRightAndDelete(int offset, RecyclerView.Recycler recycler) {
-        View currentHeader = null;
+    private void offsetToEnd(int offset) {
+        final int startPadding = mOrientationHelper.getStartAfterPadding();
 
-        int currentViewIndex = getChildCount() - 1;
+        View lastSectionView = null, endSectionView = null;
+        int currentViewIndex = 0;
 
-        while (currentViewIndex >= 0) {
+        while (currentViewIndex < getChildCount()) {
             View currentView = getChildAt(currentViewIndex);
+            int currentViewOffset = -offset;
 
             if (getItemViewType(currentView) == SHRVItemType.TYPE_HEADER) {
-                int currentViewFutureLeft = getDecoratedLeft(currentView) - offset;
+                if (lastSectionView != null && endSectionView != null) {
+                    final int currentViewStart = mOrientationHelper.getDecoratedStart(currentView);
+                    final int currentViewEnd = mOrientationHelper.getDecoratedEnd(currentView);
 
-                if (currentHeader != null) {
-                    if (currentViewFutureLeft <= getPaddingLeft()) {
-                        mHeadersIndexes.add(getPosition(currentHeader));
+                    if (currentViewStart == startPadding) {
+                        final int lastSectionStart = mOrientationHelper.getDecoratedStart(lastSectionView);
 
-                        removeAndRecycleView(currentHeader, recycler);
-
-                        currentView.offsetLeftAndRight(getPaddingLeft() - getDecoratedLeft(currentView));
-
-                        currentHeader = currentView;
-                    } else {
-                        if (currentViewFutureLeft < getDecoratedRight(currentHeader)) {
-                            currentHeader.offsetLeftAndRight(-(getDecoratedRight(currentHeader) - currentViewFutureLeft));
-                        }
-                        currentView.offsetLeftAndRight(-offset);
-                    }
-                } else {
-                    if (currentViewIndex == getChildCount() - 1) {
-                        currentHeader = currentView;
-                    } else {
-                        if (currentViewFutureLeft <= getPaddingLeft()) {
-                            currentView.offsetLeftAndRight(getPaddingLeft() - getDecoratedLeft(currentView));
-                            currentHeader = currentView;
+                        if (lastSectionStart >= currentViewEnd) {
+                            currentViewOffset = lastSectionStart - currentViewEnd;
                         } else {
-                            currentView.offsetLeftAndRight(-offset);
+                            currentViewOffset = 0;
+                        }
+                    }else if(currentViewStart < startPadding){
+                        final int currentViewMeasurement = mOrientationHelper.getDecoratedMeasurement(currentView);
+                        final int endSectionEnd = mOrientationHelper.getDecoratedEnd(endSectionView);
+
+                        if(endSectionEnd > startPadding + currentViewMeasurement){
+                            currentViewOffset = startPadding - currentViewStart;
+                        }else {
+                            currentViewOffset = endSectionEnd - currentViewEnd;
                         }
                     }
                 }
+                endSectionView = null;
             } else {
-                if (getDecoratedRight(currentView) - offset <= getPaddingLeft()) {
-                    removeAndRecycleView(currentView, recycler);
-                } else {
-                    currentView.offsetLeftAndRight(-offset);
+                lastSectionView = currentView;
+                if (endSectionView == null) {
+                    endSectionView = lastSectionView;
                 }
             }
-            currentViewIndex--;
+            mOrientationHelper.offsetChild(currentView, currentViewOffset);
+
+            currentViewIndex++;
         }
     }
 
     /**
      * Add views (if need ) to the start of the recyclerView and return maximum possible offset(not below the original offset).
      *
-     * @param offset       Original offset.
+     * @param offset   Original offset.
      * @param recycler {@link android.support.v7.widget.RecyclerView.Recycler} to get view.
      * @return
      */
@@ -511,206 +510,83 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
     }
 
     /**
-     * Scroll content to left.All view that reached out of the screen are recycled.
+     * Scroll content to start(top or left).
      *
      * @param offset   The value to which we must scroll the content.
-     * @param recycler {@link android.support.v7.widget.RecyclerView.Recycler} to get or recycle view.
      */
-    private void offsetToLeftAndDelete(int offset, RecyclerView.Recycler recycler) {
-        int currentViewIndex = 0;
-        View lastSectionView = null, endSectionView = null;
+    private void offsetToStart(int offset) {
+        final int startPadding = mOrientationHelper.getStartAfterPadding();
 
-        while (currentViewIndex < getChildCount()) {
-            View currentView = getChildAt(currentViewIndex);
-            int currentViewFutureLeft = getDecoratedLeft(currentView) - offset;
-
-            if (getItemViewType(currentView) == SHRVItemType.TYPE_HEADER) {
-                if (lastSectionView != null && endSectionView != null) {
-                    if (getPosition(lastSectionView) - getPosition(currentView) == 1) {
-                        if (getDecoratedLeft(lastSectionView) - getDecoratedMeasuredWidth(currentView) >= getWidth() - getPaddingRight()) {
-                            removeAndRecycleView(currentView, recycler);
-                            currentViewIndex--;
-                        } else {
-                            if (getDecoratedLeft(currentView) <= getPaddingLeft()) {
-                                if (getDecoratedLeft(lastSectionView) > getDecoratedMeasuredWidth(currentView) + getPaddingLeft()) {
-                                    currentView.offsetLeftAndRight(getDecoratedLeft(lastSectionView) - getDecoratedRight(currentView));
-                                } else {
-                                    if (getDecoratedLeft(endSectionView) >= getPaddingLeft()) {
-                                        currentView.offsetLeftAndRight(getPaddingLeft() - getDecoratedLeft(currentView));
-                                    } else {
-                                        if (getDecoratedRight(endSectionView) >= getDecoratedMeasuredWidth(currentView) + getPaddingLeft()) {
-                                            currentView.offsetLeftAndRight(getPaddingLeft() - getDecoratedLeft(currentView));
-                                        } else {
-                                            currentView.offsetLeftAndRight(getDecoratedRight(endSectionView) - getDecoratedRight(currentView));
-                                        }
-                                    }
-                                }
-                            } else {
-                                currentView.offsetLeftAndRight(-offset);
-                            }
-                        }
-                    } else {
-                        if (currentViewFutureLeft > getPaddingLeft()) {
-                            currentView.offsetLeftAndRight(getPaddingLeft() - getDecoratedLeft(currentView));
-                        } else {
-                            currentView.offsetLeftAndRight(-offset);
-                        }
-                    }
-
-                } else {
-                    if (currentViewFutureLeft >= getWidth() - getPaddingRight()) {
-                        removeAndRecycleView(currentView, recycler);
-                        currentViewIndex--;
-                    } else {
-                        currentView.offsetLeftAndRight(-offset);
-                    }
-                }
-                endSectionView = null;
-            } else {
-                if (currentViewFutureLeft >= getWidth() - getPaddingRight()) {
-                    removeAndRecycleView(currentView, recycler);
-                    currentViewIndex--;
-                } else {
-                    currentView.offsetLeftAndRight(-offset);
-                }
-
-                lastSectionView = currentView;
-                if (endSectionView == null) {
-                    endSectionView = lastSectionView;
-                }
-            }
-            currentViewIndex++;
-        }
-    }
-
-
-    /**
-     * Scroll content to top.All view that reached out of the screen are recycled.
-     *
-     * @param offset   The value to which we must scroll the content.
-     * @param recycler {@link android.support.v7.widget.RecyclerView.Recycler} to get or recycle view.
-     */
-    private void offsetToTopAndDelete(int offset, RecyclerView.Recycler recycler) {
-        int currentViewIndex = 0;
-        View lastSectionView = null, endSectionView = null;
-
-        while (currentViewIndex < getChildCount()) {
-            View currentView = getChildAt(currentViewIndex);
-            int currentViewFutureTop = getDecoratedTop(currentView) - offset;
-
-            if (getItemViewType(currentView) == SHRVItemType.TYPE_HEADER) {
-                if (lastSectionView != null && endSectionView != null) {
-                    if (getPosition(lastSectionView) - getPosition(currentView) == 1) {
-                        if (getDecoratedTop(lastSectionView) - getDecoratedMeasuredHeight(currentView) >= getHeight() - getPaddingBottom()) {
-                            removeAndRecycleView(currentView, recycler);
-                            currentViewIndex--;
-                        } else {
-                            if (getDecoratedTop(currentView) <= getPaddingTop()) {
-                                if (getDecoratedTop(lastSectionView) > getDecoratedMeasuredHeight(currentView) + getPaddingTop()) {
-                                    currentView.offsetTopAndBottom(getDecoratedTop(lastSectionView) - getDecoratedBottom(currentView));
-                                } else {
-                                    if (getDecoratedTop(endSectionView) >= getPaddingTop()) {
-                                        currentView.offsetTopAndBottom(getPaddingTop() - getDecoratedTop(currentView));
-                                    } else {
-                                        if (getDecoratedBottom(endSectionView) >= getDecoratedMeasuredHeight(currentView) + getPaddingTop()) {
-                                            currentView.offsetTopAndBottom(getPaddingTop() - getDecoratedTop(currentView));
-                                        } else {
-                                            currentView.offsetTopAndBottom(getDecoratedBottom(endSectionView) - getDecoratedBottom(currentView));
-                                        }
-                                    }
-                                }
-                            } else {
-                                currentView.offsetTopAndBottom(-offset);
-                            }
-                        }
-                    } else {
-                        if (currentViewFutureTop > getPaddingTop()) {
-                            currentView.offsetTopAndBottom(getPaddingTop() - getDecoratedTop(currentView));
-                        } else {
-                            currentView.offsetTopAndBottom(-offset);
-                        }
-                    }
-
-                } else {
-                    if (currentViewFutureTop >= getHeight() - getPaddingBottom()) {
-                        removeAndRecycleView(currentView, recycler);
-                        currentViewIndex--;
-                    } else {
-                        currentView.offsetTopAndBottom(-offset);
-                    }
-                }
-                endSectionView = null;
-            } else {
-                if (currentViewFutureTop >= getHeight() - getPaddingBottom()) {
-                    removeAndRecycleView(currentView, recycler);
-                    currentViewIndex--;
-                } else {
-                    currentView.offsetTopAndBottom(-offset);
-                }
-
-                lastSectionView = currentView;
-                if (endSectionView == null) {
-                    endSectionView = lastSectionView;
-                }
-            }
-            currentViewIndex++;
-        }
-    }
-
-
-
-    /**
-     * Scroll content to bottom.All view that reached out of the screen are recycled.
-     *
-     * @param offset   The value to which we must scroll the content.
-     * @param recycler {@link android.support.v7.widget.RecyclerView.Recycler} to get or recycle view.
-     */
-    private void offsetToBottomAndDelete(int offset, RecyclerView.Recycler recycler) {
         View currentHeader = null;
-
         int currentViewIndex = getChildCount() - 1;
 
         while (currentViewIndex >= 0) {
             View currentView = getChildAt(currentViewIndex);
+            int currentViewOffset = -offset;
 
             if (getItemViewType(currentView) == SHRVItemType.TYPE_HEADER) {
-                int currentViewFutureTop = getDecoratedTop(currentView) - offset;
+                final int currentViewStart = mOrientationHelper.getDecoratedStart(currentView);
+                final int currentViewFutureStart = currentViewStart - offset;
 
                 if (currentHeader != null) {
-                    if (currentViewFutureTop <= getPaddingTop()) {
-                        mHeadersIndexes.add(getPosition(currentHeader));
+                    final int currentHeaderEnd = mOrientationHelper.getDecoratedEnd(currentHeader);
 
-                        removeAndRecycleView(currentHeader, recycler);
+                    if (currentViewFutureStart <= startPadding) {
+                        currentViewOffset = startPadding - currentViewStart;
 
-                        currentView.offsetTopAndBottom(getPaddingTop() - getDecoratedTop(currentView));
+                        mOrientationHelper.offsetChild(currentHeader,-currentHeaderEnd);
 
                         currentHeader = currentView;
                     } else {
-                        if (currentViewFutureTop < getDecoratedBottom(currentHeader)) {
-                            currentHeader.offsetTopAndBottom(-(getDecoratedBottom(currentHeader) - currentViewFutureTop));
+                        if (currentViewFutureStart < currentHeaderEnd) {
+                            mOrientationHelper.offsetChild(currentHeader,-(currentHeaderEnd - currentViewFutureStart));
                         }
-                        currentView.offsetTopAndBottom(-offset);
                     }
                 } else {
                     if (currentViewIndex == getChildCount() - 1) {
+                        currentViewOffset = 0;
                         currentHeader = currentView;
                     } else {
-                        if (currentViewFutureTop <= getPaddingTop()) {
-                            currentView.offsetTopAndBottom(getPaddingTop() - getDecoratedTop(currentView));
+                        if (currentViewFutureStart <= startPadding) {
+                            currentViewOffset = startPadding - currentViewStart;
                             currentHeader = currentView;
-                        } else {
-                            currentView.offsetTopAndBottom(-offset);
                         }
                     }
                 }
-            } else {
-                if (getDecoratedBottom(currentView) - offset <= getPaddingTop()) {
-                    removeAndRecycleView(currentView, recycler);
-                } else {
-                    currentView.offsetTopAndBottom(-offset);
-                }
             }
+            mOrientationHelper.offsetChild(currentView, currentViewOffset);
+
             currentViewIndex--;
+        }
+    }
+
+    /**
+     * Delete all invisible views.
+     *
+     * @param recycler
+     */
+    private void deleteInvisibleViews(RecyclerView.Recycler recycler) {
+        final int startPadding = mOrientationHelper.getStartAfterPadding();
+        final int endPadding = mOrientationHelper.getEndAfterPadding();
+
+        int currentViewIndex = 0;
+
+        while (currentViewIndex < getChildCount()) {
+            View view = getChildAt(currentViewIndex);
+
+            final int currentViewEnd = mOrientationHelper.getDecoratedEnd(view);
+            final int currentViewStart = mOrientationHelper.getDecoratedStart(view);
+
+            if (currentViewEnd <= startPadding) {
+                if (getItemViewType(view) == SHRVItemType.TYPE_HEADER) {
+                    mHeadersIndexes.add(getPosition(view));
+                }
+                removeAndRecycleView(view, recycler);
+            } else if (currentViewStart >= endPadding) {
+                removeAndRecycleView(view, recycler);
+            } else {
+                currentViewIndex++;
+            }
         }
     }
 
@@ -738,12 +614,12 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
 
         switch (destination) {
             case sStart:
-                if(mOrientation == VERTICAL){
+                if (mOrientation == VERTICAL) {
                     left = getPaddingLeft();
                     top = value - getDecoratedMeasuredHeight(newView);
                     right = left + getDecoratedMeasuredWidth(newView);
                     bottom = value;
-                }else{
+                } else {
                     left = value - getDecoratedMeasuredWidth(newView);
                     top = getPaddingTop();
                     right = value;
@@ -751,12 +627,12 @@ public class SHRVLinearLayoutManager extends RecyclerView.LayoutManager implemen
                 }
                 break;
             case sEnd:
-                if(mOrientation == VERTICAL){
+                if (mOrientation == VERTICAL) {
                     left = getPaddingLeft();
                     top = value;
                     right = left + getDecoratedMeasuredWidth(newView);
                     bottom = value + getDecoratedMeasuredHeight(newView);
-                }else{
+                } else {
                     left = value;
                     top = getPaddingTop();
                     right = value + getDecoratedMeasuredWidth(newView);

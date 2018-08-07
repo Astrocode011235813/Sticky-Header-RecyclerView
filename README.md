@@ -2,7 +2,7 @@
 
 This library allows you to create lists with sticky headers in a vertical or horizontal orientation.Supports **API 10** and above.
 
-![Example vertical](img_example_vertical.gif)
+![Example vertical](shrv_preview.gif)
 
 ## Usage
 
@@ -41,7 +41,7 @@ Then instead standart layout manager use SHRVLinearLayoutManager:
 
 ## License
 
-Copyright 2017 Astrocode011235813
+Copyright 2018 Astrocode011235813
 
    Licensed under the Apache License, Version 2.0 (the "License");  
    you may not use this file except in compliance with the License.  

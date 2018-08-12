@@ -30,22 +30,21 @@ public class AdapterMain extends RecyclerView.Adapter<AdapterMain.ViewHolderMain
     private final static int TYPE_ITEM = 1;
 
     private final Context mContext;
-    private final int mOrientation;
 
-    private final int mHeaderSize,mItemSize;
+    private final int mHeaderSize, mItemSize;
     private final int mItemPadding;
 
-    private final int mHeaderColor,mHeaderTextColor;
-    private final int mItemColor,mItemTextColor;
+    private final int mHeaderColor, mHeaderTextColor;
+    private final int mItemColor, mItemTextColor;
 
     private ArrayList<String> mData;
 
-    public AdapterMain(Context context,int orientation) {
+    public AdapterMain(Context context) {
         mContext = context;
-        mOrientation = orientation;
+
         mData = new ArrayList<String>(Arrays.asList(context.getResources().getStringArray(R.array.Countries)));
 
-        Resources res =  mContext.getResources();
+        Resources res = mContext.getResources();
 
         mHeaderSize = res.getDimensionPixelSize(R.dimen.list_header_item_size);
         mItemSize = res.getDimensionPixelSize(R.dimen.list_item_size);
@@ -62,49 +61,34 @@ public class AdapterMain extends RecyclerView.Adapter<AdapterMain.ViewHolderMain
     public AdapterMain.ViewHolderMain onCreateViewHolder(ViewGroup parent, int viewType) {
         RelativeLayout view = new RelativeLayout(mContext);
 
-        ViewGroup.LayoutParams lp = new RelativeLayout.LayoutParams(MATCH_PARENT,MATCH_PARENT);
-        RelativeLayout.LayoutParams textViewLp = new RelativeLayout.LayoutParams(MATCH_PARENT,MATCH_PARENT);
+        ViewGroup.LayoutParams lp = new RelativeLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT);
+        RelativeLayout.LayoutParams textViewLp = new RelativeLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT);
 
         TextView textView = new TextView(mContext);
         textView.setEllipsize(TextUtils.TruncateAt.END);
         textView.setLines(1);
-        textView.setPadding(mItemPadding,mItemPadding,mItemPadding,mItemPadding);
+        textView.setPadding(mItemPadding, mItemPadding, mItemPadding, mItemPadding);
+        textView.setGravity(Gravity.START | Gravity.CENTER);
 
-        if(mOrientation == SHRVLinearLayoutManager.VERTICAL){
-            textView.setGravity(Gravity.START|Gravity.CENTER);
-            if (viewType == TYPE_HEADER) {
-                view.setBackgroundColor(mHeaderColor);
-                textView.setTextColor(mHeaderTextColor);
+        if (viewType == TYPE_HEADER) {
+            view.setBackgroundColor(mHeaderColor);
+            textView.setTextColor(mHeaderTextColor);
 
-                lp.height = mHeaderSize;
-            }else{
-                view.setBackgroundColor(mItemColor);
-                textView.setTextColor(mItemTextColor);
+            lp.height = mHeaderSize;
+        } else {
+            view.setBackgroundColor(mItemColor);
+            textView.setTextColor(mItemTextColor);
 
-                lp.height = mItemSize;
-            }
-            lp.width = MATCH_PARENT;
-        }else {
-            textView.setGravity(Gravity.CENTER);
-            if (viewType == TYPE_HEADER) {
-                view.setBackgroundColor(mHeaderColor);
-                textView.setTextColor(mHeaderTextColor);
-
-                lp.width = mHeaderSize;
-            }else{
-                view.setBackgroundColor(mItemColor);
-                textView.setTextColor(mItemTextColor);
-
-                lp.width = WRAP_CONTENT;
-            }
-            lp.height = MATCH_PARENT;
+            lp.height = mItemSize;
         }
+        lp.width = MATCH_PARENT;
+
         view.setLayoutParams(lp);
 
 
-        view.addView(textView,textViewLp);
+        view.addView(textView, textViewLp);
 
-        return new ViewHolderMain(view,textView);
+        return new ViewHolderMain(view, textView);
     }
 
     @Override
@@ -129,21 +113,9 @@ public class AdapterMain extends RecyclerView.Adapter<AdapterMain.ViewHolderMain
     public class ViewHolderMain extends RecyclerView.ViewHolder {
         TextView mTextView;
 
-        public ViewHolderMain(View itemView,TextView textView) {
+        public ViewHolderMain(View itemView, TextView textView) {
             super(itemView);
-           // itemView.setOnClickListener(mOnClickListener);
             mTextView = textView;
         }
-/*
-        private final View.OnClickListener mOnClickListener = new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                int pos = getAdapterPosition();
-
-                mData.remove(pos);
-                notifyItemRemoved(pos);
-            }
-        };
-        */
     }
 }

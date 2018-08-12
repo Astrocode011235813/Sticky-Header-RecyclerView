@@ -14,24 +14,17 @@ import ru.astrocode.shrv.library.SHRVLinearLayoutManager;
  */
 
 public class ActivityMain extends AppCompatActivity {
-    RecyclerView mRecyclerView;
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        int orientation;
+        SHRVLinearLayoutManager layoutManager = new SHRVLinearLayoutManager( SHRVLinearLayoutManager.VERTICAL);
 
-        if(getResources().getBoolean(R.bool.isPort)){
-            orientation = SHRVLinearLayoutManager.VERTICAL;
-        }else{
-            orientation = SHRVLinearLayoutManager.HORIZONTAL;
-        }
-
-        mRecyclerView = (RecyclerView) findViewById(R.id.recyclerView);
-        mRecyclerView.setLayoutManager(new SHRVLinearLayoutManager(orientation));
-        mRecyclerView.setAdapter(new AdapterMain(this,orientation));
-
+        RecyclerView recyclerView = (RecyclerView) findViewById(R.id.recyclerView);
+        recyclerView.setLayoutManager(layoutManager);
+        recyclerView.setAdapter(new AdapterMain(this));
     }
 
 }
